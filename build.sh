@@ -42,14 +42,14 @@ source /tmp/cargo/env
 echo "🐍 Upgrading pip and installing build tools..."
 pip install --upgrade pip setuptools wheel
 
-# Force use of render-optimized requirements
-echo "📚 Installing Python dependencies (Render-optimized)..."
-if [ -f "requirements-render.txt" ]; then
-    echo "✅ Found requirements-render.txt - using optimized dependencies"
-    pip install -r requirements-render.txt --prefer-binary --no-cache-dir
-else
-    echo "⚠️ requirements-render.txt not found, creating minimal install..."
-    pip install fastapi==0.103.2 uvicorn==0.23.2 pydantic==2.4.2 --prefer-binary --no-cache-dir
+# Install ultra-minimal Python dependencies
+echo "📚 Installing Python dependencies (Ultra-minimal)..."
+echo "✅ Using Render-optimized requirements.txt"
+
+# Try ultra-minimal first, fallback to emergency if needed
+if ! pip install -r requirements.txt --prefer-binary --no-cache-dir --only-binary=all; then
+    echo "⚠️ Standard install failed, trying emergency minimal..."
+    pip install -r requirements-emergency.txt --prefer-binary --no-cache-dir --only-binary=all
 fi
 
 # Create necessary directories

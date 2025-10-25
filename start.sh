@@ -16,8 +16,11 @@ mkdir -p /tmp/exports
 # Start the FastAPI server
 cd api
 
-# Try simplified version first for initial deployment
-if [ -f "main_simple.py" ]; then
+# Try different API versions in order of complexity
+if [ -f "main_emergency.py" ]; then
+    echo "Starting with emergency minimal API..."
+    uvicorn main_emergency:app --host 0.0.0.0 --port $PORT --workers 1
+elif [ -f "main_simple.py" ]; then
     echo "Starting with simplified API..."
     uvicorn main_simple:app --host 0.0.0.0 --port $PORT --workers 1
 else

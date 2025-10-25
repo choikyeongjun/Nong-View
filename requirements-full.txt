@@ -1,0 +1,47 @@
+# Core dependencies
+fastapi>=0.104.0,<0.105.0
+uvicorn[standard]>=0.24.0,<0.25.0
+pydantic>=2.4.0,<2.6.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+
+# GIS & Image Processing (Simplified for Render.com)
+# Note: GDAL will be installed via system packages in build script
+rasterio>=1.3.0
+geopandas>=0.14.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.6.0
+
+# AI/ML (Updated for compatibility)
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0  # YOLOv11
+numpy>=1.24.0
+opencv-python-headless>=4.8.0  # Headless version for server
+pillow>=10.0.0
+
+# Task Queue
+celery==5.3.4
+redis==5.0.1
+flower==2.0.1
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+click==8.1.7
+tqdm==4.66.1
+loguru==0.7.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Monitoring
+prometheus-client==0.19.0
