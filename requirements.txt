@@ -1,13 +1,8 @@
-# Ultra-minimal requirements for Render.com - pre-compiled wheels only
-# Core FastAPI stack
-fastapi==0.103.2
-uvicorn==0.23.2
-pydantic==2.4.2
+# Ultra-minimal requirements for Render.com - avoiding all Rust compilation
+# Using older FastAPI that works with pydantic v1
+fastapi==0.68.0
+uvicorn==0.15.0
+pydantic==1.10.13
 
-# Essential only
-python-multipart==0.0.6
-aiofiles==23.2.1
-python-dotenv==1.0.0
-
-# Utilities
-click==8.1.7
+# Only absolute essentials
+python-multipart==0.0.5

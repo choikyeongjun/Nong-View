@@ -17,7 +17,10 @@ mkdir -p /tmp/exports
 cd api
 
 # Try different API versions in order of complexity
-if [ -f "main_emergency.py" ]; then
+if [ -f "main_bare.py" ]; then
+    echo "Starting with bare minimum API (Starlette only)..."
+    uvicorn main_bare:app --host 0.0.0.0 --port $PORT --workers 1
+elif [ -f "main_emergency.py" ]; then
     echo "Starting with emergency minimal API..."
     uvicorn main_emergency:app --host 0.0.0.0 --port $PORT --workers 1
 elif [ -f "main_simple.py" ]; then

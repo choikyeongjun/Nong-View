@@ -1,0 +1,3 @@
+# Bare minimum - only uvicorn, no FastAPI pydantic dependency
+uvicorn==0.15.0
+starlette==0.14.2

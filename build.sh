@@ -46,10 +46,17 @@ pip install --upgrade pip setuptools wheel
 echo "📚 Installing Python dependencies (Ultra-minimal)..."
 echo "✅ Using Render-optimized requirements.txt"
 
-# Try ultra-minimal first, fallback to emergency if needed
-if ! pip install -r requirements.txt --prefer-binary --no-cache-dir --only-binary=all; then
-    echo "⚠️ Standard install failed, trying emergency minimal..."
-    pip install -r requirements-emergency.txt --prefer-binary --no-cache-dir --only-binary=all
+# Try installations in order of complexity
+echo "Attempting requirements.txt install..."
+if pip install -r requirements.txt --prefer-binary --no-cache-dir --only-binary=all; then
+    echo "✅ Standard requirements.txt installed successfully"
+elif pip install -r requirements-emergency.txt --prefer-binary --no-cache-dir --only-binary=all; then
+    echo "✅ Emergency requirements installed successfully"
+elif pip install -r requirements-bare.txt --prefer-binary --no-cache-dir --only-binary=all; then
+    echo "✅ Bare minimum requirements installed successfully"
+else
+    echo "💥 All requirement files failed, trying manual install..."
+    pip install uvicorn==0.15.0 starlette==0.14.2 --prefer-binary --no-cache-dir --only-binary=all
 fi
 
 # Create necessary directories
