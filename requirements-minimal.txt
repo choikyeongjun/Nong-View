@@ -1,0 +1,33 @@
+# Minimal Requirements for Render.com Deployment
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+psycopg2-binary==2.9.9
+
+# Basic Dependencies
+aiofiles==23.2.1
+python-dotenv==1.0.0
+redis==5.0.1
+
+# Essential GIS (minimal set)
+shapely>=2.0.0
+pyproj>=3.6.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.1.0
+
+# Utilities
+click==8.1.7
+loguru==0.7.2
+
+# Testing
+pytest==7.4.3
+httpx==0.25.2

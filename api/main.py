@@ -10,10 +10,12 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 import logging
 import time
+import os
 import uvicorn
 
 from v1.endpoints import images, analyses, crops, exports, statistics
 from v1.dependencies import get_db
+from config import settings
 
 # 로깅 설정
 logging.basicConfig(
@@ -24,18 +26,19 @@ logger = logging.getLogger(__name__)
 
 # FastAPI 애플리케이션 생성
 app = FastAPI(
-    title="Nong-View API",
+    title=settings.PROJECT_NAME,
     description="AI 기반 농업 영상 분석 플랫폼 API",
-    version="1.0.0",
+    version=settings.VERSION,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    openapi_url="/api/v1/openapi.json"
+    openapi_url="/api/v1/openapi.json",
+    debug=settings.DEBUG
 )
 
 # 미들웨어 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 구체적인 도메인 지정
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -120,7 +123,9 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": time.time(),
-        "version": "1.0.0"
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "api_docs": "/api/docs"
     }
 
 
@@ -145,8 +150,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower()
     )

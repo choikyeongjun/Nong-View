@@ -1,0 +1,100 @@
+# Render.com Blueprint Configuration
+# https://render.com/docs/blueprint-spec
+
+services:
+  # FastAPI Web Service
+  - type: web
+    name: nong-view-api
+    env: python
+    plan: starter  # 무료 플랜 (월 750시간)
+    buildCommand: |
+      # GDAL 설치
+      apt-get update && apt-get install -y gdal-bin libgdal-dev g++ gcc
+      # Python 의존성 설치
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: |
+      cd api && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: GDAL_CONFIG
+        value: /usr/bin/gdal-config
+      - key: GDAL_DATA
+        value: /usr/share/gdal
+      - key: PROJ_LIB
+        value: /usr/share/proj
+      - key: ENVIRONMENT
+        value: production
+      - key: API_V1_STR
+        value: /api/v1
+      - key: PROJECT_NAME
+        value: Nong-View API
+      # 데이터베이스 설정 (PostgreSQL)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nong-view-db
+          property: connectionString
+      # Redis 설정
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: nong-view-redis
+          property: connectionString
+      # 파일 저장소 설정
+      - key: UPLOAD_PATH
+        value: /tmp/uploads
+      - key: CROP_PATH
+        value: /tmp/crops
+      - key: EXPORT_PATH
+        value: /tmp/exports
+      # 보안 설정
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 1440
+      # CORS 설정
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: CORS_ORIGINS
+        value: "https://your-frontend-domain.com,http://localhost:3000"
+
+  # PostgreSQL Database
+  - type: pgsql
+    name: nong-view-db
+    plan: free  # 무료 플랜 (1GB 저장소)
+    databaseName: nongview
+    user: nongview_user
+    postInitSQL: |
+      CREATE EXTENSION IF NOT EXISTS postgis;
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+  # Redis Cache
+  - type: redis
+    name: nong-view-redis
+    plan: free  # 무료 플랜 (25MB)
+    maxmemoryPolicy: allkeys-lru
+
+  # Background Worker (선택사항)
+  # - type: worker
+  #   name: nong-view-worker
+  #   env: python
+  #   plan: starter
+  #   buildCommand: |
+  #     apt-get update && apt-get install -y gdal-bin libgdal-dev g++ gcc
+  #     pip install --upgrade pip
+  #     pip install -r requirements.txt
+  #   startCommand: |
+  #     celery -A api.worker worker --loglevel=info
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: 3.10.12
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: nong-view-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       fromService:
+  #         type: redis
+  #         name: nong-view-redis
+  #         property: connectionString
