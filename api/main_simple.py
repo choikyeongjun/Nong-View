@@ -1,22 +1,18 @@
 """
-Simplified Nong-View API for Render.com deployment
-Basic version without heavy GIS dependencies
+Ultra-simplified Nong-View API for Render.com deployment
+Minimal version with only essential dependencies
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import logging
-import time
 import os
+import time
 from typing import Dict, Any
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Simple print-based logging to avoid logging module issues
+def log_info(message: str):
+    print(f"[INFO] {time.strftime('%Y-%m-%d %H:%M:%S')} - {message}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -40,12 +36,12 @@ app.add_middleware(
 async def log_requests(request, call_next):
     """Request logging middleware"""
     start_time = time.time()
-    logger.info(f"Request: {request.method} {request.url}")
+    log_info(f"Request: {request.method} {request.url}")
     
     response = await call_next(request)
     
     process_time = time.time() - start_time
-    logger.info(f"Response: {response.status_code} Time: {process_time:.3f}s")
+    log_info(f"Response: {response.status_code} Time: {process_time:.3f}s")
     response.headers["X-Process-Time"] = str(process_time)
     
     return response
@@ -93,7 +89,7 @@ async def api_status() -> Dict[str, Any]:
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc: Exception):
     """Global exception handler"""
-    logger.error(f"Unexpected error: {str(exc)}", exc_info=True)
+    log_info(f"Unexpected error: {str(exc)}")
     
     return JSONResponse(
         status_code=500,

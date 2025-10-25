@@ -7,45 +7,49 @@ echo "🚀 Starting Nong-View build process..."
 echo "📦 Updating package list..."
 apt-get update
 
-# Install Rust for packages that need compilation
-echo "🦀 Installing Rust toolchain..."
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source ~/.cargo/env
-
-# Install GDAL and dependencies
-echo "🗺️ Installing GDAL and geospatial dependencies..."
+# Install essential build tools
+echo "🔧 Installing build tools..."
 apt-get install -y \
-    gdal-bin \
-    libgdal-dev \
+    build-essential \
     g++ \
     gcc \
     libc6-dev \
-    pkg-config \
+    pkg-config
+
+# Install GDAL and dependencies (minimal set)
+echo "🗺️ Installing minimal GDAL dependencies..."
+apt-get install -y \
+    gdal-bin \
+    libgdal-dev \
     libproj-dev \
     proj-data \
     proj-bin
 
-# Set GDAL environment variables
+# Set environment variables
 export GDAL_CONFIG=/usr/bin/gdal-config
 export GDAL_DATA=/usr/share/gdal
 export PROJ_LIB=/usr/share/proj
 
-# Upgrade pip
-echo "🐍 Upgrading pip..."
-pip install --upgrade pip
+# Setup Rust with writable cache directory
+echo "🦀 Setting up Rust environment..."
+export CARGO_HOME=/tmp/cargo
+export RUSTUP_HOME=/tmp/rustup
+export PATH=/tmp/cargo/bin:$PATH
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+source /tmp/cargo/env
 
-# Install Python dependencies
-echo "📚 Installing Python dependencies..."
-# Try Render-optimized requirements first, fallback to minimal if needed
+# Upgrade pip and install wheel
+echo "🐍 Upgrading pip and installing build tools..."
+pip install --upgrade pip setuptools wheel
+
+# Force use of render-optimized requirements
+echo "📚 Installing Python dependencies (Render-optimized)..."
 if [ -f "requirements-render.txt" ]; then
-    echo "Using Render-optimized requirements..."
-    pip install -r requirements-render.txt
-elif [ -f "requirements-minimal.txt" ]; then
-    echo "Using minimal requirements..."
-    pip install -r requirements-minimal.txt
+    echo "✅ Found requirements-render.txt - using optimized dependencies"
+    pip install -r requirements-render.txt --prefer-binary --no-cache-dir
 else
-    echo "Using standard requirements..."
-    pip install -r requirements.txt
+    echo "⚠️ requirements-render.txt not found, creating minimal install..."
+    pip install fastapi==0.103.2 uvicorn==0.23.2 pydantic==2.4.2 --prefer-binary --no-cache-dir
 fi
 
 # Create necessary directories

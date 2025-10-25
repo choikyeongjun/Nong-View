@@ -1,31 +1,21 @@
-# Render.com optimized requirements - avoiding Rust compilation issues
-# Core Framework - using versions with pre-compiled wheels
+# Ultra-minimal requirements for Render.com - pre-compiled wheels only
+# Core FastAPI stack
 fastapi==0.103.2
-uvicorn[standard]==0.23.2
-pydantic==2.4.2  # Avoids pydantic-core Rust compilation
+uvicorn==0.23.2
+pydantic==2.4.2
+
+# Essential only
 python-multipart==0.0.6
-
-# Database - essential only
-sqlalchemy==2.0.23
-asyncpg==0.29.0
-
-# Basic Dependencies
 aiofiles==23.2.1
 python-dotenv==1.0.0
-redis==5.0.1
-
-# Essential GIS - minimal versions with pre-compiled wheels
-shapely==2.0.2
-pyproj==3.6.1
-
-# Data Processing - core only
-numpy==1.24.4
-pandas==2.1.4
 
 # Utilities
 click==8.1.7
-loguru==0.7.2
 
-# Testing
-pytest==7.4.3
-httpx==0.25.2
+# Avoid all packages that require compilation:
+# - No sqlalchemy (requires compilation)
+# - No asyncpg (requires compilation) 
+# - No redis (requires compilation)
+# - No shapely (requires GEOS)
+# - No numpy/pandas (large dependencies)
+# - No pytest/httpx (avoid for now)
