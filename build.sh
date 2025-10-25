@@ -7,6 +7,11 @@ echo "🚀 Starting Nong-View build process..."
 echo "📦 Updating package list..."
 apt-get update
 
+# Install Rust for packages that need compilation
+echo "🦀 Installing Rust toolchain..."
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source ~/.cargo/env
+
 # Install GDAL and dependencies
 echo "🗺️ Installing GDAL and geospatial dependencies..."
 apt-get install -y \
@@ -31,7 +36,17 @@ pip install --upgrade pip
 
 # Install Python dependencies
 echo "📚 Installing Python dependencies..."
-pip install -r requirements.txt
+# Try Render-optimized requirements first, fallback to minimal if needed
+if [ -f "requirements-render.txt" ]; then
+    echo "Using Render-optimized requirements..."
+    pip install -r requirements-render.txt
+elif [ -f "requirements-minimal.txt" ]; then
+    echo "Using minimal requirements..."
+    pip install -r requirements-minimal.txt
+else
+    echo "Using standard requirements..."
+    pip install -r requirements.txt
+fi
 
 # Create necessary directories
 echo "📁 Creating data directories..."
