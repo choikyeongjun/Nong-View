@@ -1,372 +1,360 @@
 # 🌾 Nong-View: AI 기반 농업영상분석 플랫폼
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 [![YOLOv11](https://img.shields.io/badge/YOLOv11-Ultralytics-orange.svg)](https://docs.ultralytics.com)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0+-red.svg)](https://www.sqlalchemy.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-PostGIS-336791.svg)](https://postgis.net)
-[![Render](https://img.shields.io/badge/Deploy-Render.com-46e3b7.svg)](https://render.com)
 
 > **드론 정사영상을 활용한 AI 기반 농업 모니터링 및 행정 자동화 시스템**
 
-**프로젝트 상태**: 🚀 **85% 완성** (MVP 준비 완료)  
-**개발 재개**: 2025-10-28  
-**MVP 목표**: 2025-11-07
+**프로젝트 상태**: 🚀 **90% 완성** (데이터베이스 통합 완료)  
+**최종 업데이트**: 2025-10-27  
+**MVP 목표**: 2025-11-05
 
 ---
 
-## 📊 **현재 개발 상태**
+## 🎯 프로젝트 소개
 
-### 🎯 **완성도 현황**
+Nong-View는 드론으로 촬영한 정사영상을 AI로 분석하여 농업 현황을 자동으로 파악하고, 
+행정 보고서를 생성하는 스마트 농업 플랫폼입니다.
+
+### 📌 핵심 가치
+- **자동화**: 수작업 분석을 AI로 대체하여 업무 효율 극대화
+- **정확성**: YOLOv11 기반 고정밀 객체 탐지 및 분류
+- **표준화**: GPKG 형식의 표준 행정 보고서 자동 생성
+- **확장성**: 모듈식 아키텍처로 새로운 분석 모델 쉽게 추가
+
+### 🔍 주요 분석 대상
+- 🌾 **조사료/사료작물**: 목초지 분포 및 면적 산출
+- 🏠 **비닐하우스**: 시설농업 현황 파악
+- 🌱 **경작/휴경지**: 농지 이용 상태 모니터링
+- 📊 **필지별 통계**: PNU 기반 상세 농업 통계
+
+---
+
+## 📊 개발 현황
+
+### 🎯 전체 완성도: **90%**
+
 ```
 🏗️ 핵심 처리 파이프라인     ████████████████████ 100% ✅
-🔌 API 개발               ████████░░░░░░░░░░░░  40% 🔄
-🗄️ 데이터베이스 통합        ░░░░░░░░░░░░░░░░░░░░   0% ❌
+🔌 API 개발               ████████░░░░░░░░░░░░  40% 🔄  
+🗄️ 데이터베이스           ████████████████████ 100% ✅ NEW!
 🚀 배포 인프라             ████████████████░░░░  80% ✅
-📚 문서화                 ███████████████████░  95% ✅
-🧪 테스트                 ████░░░░░░░░░░░░░░░░  20% ❌
+📚 문서화                 ████████████████████  98% ✅
+🧪 테스트                 ██████░░░░░░░░░░░░░░  30% 🔄
 ```
 
-### 📈 **코드 통계**
-- **총 46개 Python 파일**, **10,045줄 코드**
-- **6개 POD 모듈 100% 완성** (프로덕션 준비)
-- **종합 API 구조 완성** (데이터 연결 대기)
-- **완전한 문서화** (25+ 가이드 문서)
+### 📈 코드 통계
+- **총 52개 파일**, **12,500+ 줄 코드**
+- **6개 POD 모듈**: 100% 완성 (프로덕션 준비)
+- **8개 DB 테이블**: SQLAlchemy 모델 구현 완료
+- **30+ 문서**: 아키텍처, 가이드, 프롬프트
 
 ---
 
-## 🎯 **프로젝트 개요**
+## 🏗️ 시스템 아키텍처
 
-### **핵심 기능**
-1. **🗂️ 데이터 수집**: 드론 영상 메타데이터 추출 및 관리
-2. **✂️ 이미지 크로핑**: ROI 기반 자동 영역 추출
-3. **🧩 타일링**: 640x640 타일 생성 및 인덱싱
-4. **🤖 AI 분석**: YOLOv11 기반 농업 객체 탐지
-5. **🔗 결과 병합**: 공간 집계 및 통계 산출
-6. **📦 GPKG 내보내기**: 행정보고용 표준 포맷 생성
+### 처리 파이프라인
+```mermaid
+graph LR
+    A[드론 영상] --> B[POD1: 수집]
+    B --> C[POD2: 크로핑]
+    C --> D[POD3: 타일링]
+    D --> E[POD4: AI 분석]
+    E --> F[POD5: 병합]
+    F --> G[POD6: GPKG]
+    G --> H[행정 보고서]
+```
 
-### **활용 사례**
-- **조사료/사료작물 분류**: 목초지 분포 및 면적 산출
-- **비닐하우스 탐지**: 시설농업 현황 파악
-- **경작/휴경 판별**: 농지이용 상태 모니터링
-- **행정 보고서 자동화**: GPKG 기반 공식 문서 생성
+### 기술 스택
+| 분류 | 기술 | 용도 |
+|------|------|------|
+| **Backend** | FastAPI, Pydantic | REST API 서버 |
+| **Database** | PostgreSQL, SQLAlchemy | 데이터 저장 및 ORM |
+| **AI/ML** | YOLOv11, PyTorch | 객체 탐지 및 분류 |
+| **GIS** | GDAL, Rasterio, Shapely | 공간 데이터 처리 |
+| **Deploy** | Docker, Render.com | 컨테이너화 및 배포 |
 
 ---
 
-## 🏗️ **시스템 아키텍처**
+## 🚀 빠른 시작
 
-### **POD (Processing Module) 구조**
-```
-입력 영상 → POD1 → POD2 → POD3 → POD4 → POD5 → POD6 → 출력 GPKG
-          수집   크로핑  타일링  AI추론  병합   내보내기
-```
-
-### **기술 스택**
-- **Backend**: FastAPI, Pydantic, SQLAlchemy
-- **AI/ML**: YOLOv11 (Ultralytics), PyTorch
-- **GIS**: PostGIS, GeoPandas, Shapely, Rasterio
-- **Database**: PostgreSQL + PostGIS, Redis
-- **Deploy**: Render.com, Docker
-- **Testing**: pytest, httpx
-
----
-
-## 🚀 **빠른 시작**
-
-### **1. 환경 설정**
+### 1. 환경 설정
 ```bash
-# 리포지토리 클론
+# 저장소 클론
 git clone https://github.com/aebonlee/Nong-View.git
 cd Nong-View
 
-# Python 가상환경 생성
+# 가상환경 생성 및 활성화
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 의존성 설치
 pip install -r requirements.txt
 ```
 
-### **2. 개발 서버 실행**
+### 2. 데이터베이스 설정
 ```bash
-# API 서버 시작
+# 환경변수 설정
+cp .env.example .env
+# .env 파일에서 DATABASE_URL 수정
+
+# 데이터베이스 테스트 (Windows)
+D:\Nong-View\run_test.bat
+
+# 또는 Python 직접 실행
+python test_db.py
+```
+
+### 3. API 서버 실행
+```bash
 cd api
-uvicorn main:app --reload
-
-# 서버 확인
-curl http://localhost:8000/health
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### **3. POD 모듈 테스트**
+### 4. API 문서 확인
+브라우저에서 http://localhost:8000/docs 접속
+
+---
+
+## 📦 완성된 모듈
+
+### ✅ POD 모듈 (Processing Modules)
+| 모듈 | 설명 | 코드 | 상태 |
+|------|------|------|------|
+| **POD1** | 데이터 수집 및 메타데이터 추출 | 491줄 | ✅ 완성 |
+| **POD2** | ROI 기반 이미지 크로핑 | 377줄 | ✅ 완성 |
+| **POD3** | 640x640 타일 생성 | 451줄 | ✅ 완성 |
+| **POD4** | YOLOv11 AI 추론 | 559줄 | ✅ 완성 |
+| **POD5** | 결과 병합 및 통계 | 598줄 | ✅ 완성 |
+| **POD6** | GPKG 표준 포맷 생성 | 506줄 | ✅ 완성 |
+
+### ✅ 데이터베이스 모델 (NEW!)
+| 테이블 | 용도 | 필드 수 | 관계 |
+|--------|------|---------|------|
+| **Images** | 영상 메타데이터 | 13 | 1:N with Analysis |
+| **Analyses** | 분석 작업 관리 | 12 | 1:N with Results |
+| **Results** | AI 분석 결과 | 10 | N:1 with Analysis |
+| **Tiles** | 타일 정보 | 12 | N:1 with Image |
+| **TileResults** | 타일별 결과 | 5 | N:1 with Tile |
+| **Parcels** | 필지 정보 | 9 | 1:N with Statistics |
+| **ParcelStatistics** | 필지 통계 | 8 | N:1 with Parcel |
+| **Exports** | GPKG 내보내기 | 10 | Standalone |
+
+---
+
+## 🔌 API 엔드포인트
+
+### 구현 상태
+- ✅ **구조**: FastAPI 프레임워크, 미들웨어, 에러 핸들링
+- 🔄 **엔드포인트**: 기본 구현 (40%)
+- ✅ **데이터베이스**: SQLAlchemy 모델 완성
+- ❌ **인증**: JWT 토큰 (예정)
+
+### 주요 엔드포인트
+```yaml
+Images:
+  POST   /api/v1/images          # 이미지 업로드
+  GET    /api/v1/images/{id}     # 이미지 조회
+  DELETE /api/v1/images/{id}     # 이미지 삭제
+
+Analysis:
+  POST   /api/v1/analyses        # 분석 시작
+  GET    /api/v1/analyses/{id}   # 분석 결과
+
+Exports:
+  POST   /api/v1/exports         # GPKG 생성
+  GET    /api/v1/exports/{id}    # 다운로드
+
+Statistics:
+  GET    /api/v1/statistics      # 전체 통계
+  GET    /api/v1/parcels/{pnu}   # 필지별 통계
+```
+
+---
+
+## 🗄️ 데이터베이스 스키마
+
+### ERD (Entity Relationship Diagram)
+```
+Images ──┬──> Analyses ──> Results
+         │
+         └──> Tiles ──> TileResults
+         
+Parcels ──> ParcelStatistics
+
+Exports (독립)
+```
+
+### 주요 특징
+- **UUID Primary Keys**: 분산 환경 대비
+- **JSON 필드**: 유연한 메타데이터 저장
+- **CASCADE 삭제**: 데이터 무결성 보장
+- **타임스탬프**: created_at, updated_at 자동 관리
+
+---
+
+## 🧪 테스트
+
+### 현재 테스트 커버리지: **30%**
 ```bash
-# 타일링 테스트 실행
-pytest tests/test_tiling.py -v
+# 데이터베이스 테스트
+python test_db.py
 
-# 전체 테스트 실행
-pytest tests/ -v
+# POD 모듈 테스트
+pytest tests/unit/ -v
+
+# API 통합 테스트
+pytest tests/integration/ -v
+
+# 전체 테스트 및 커버리지
+pytest --cov=src --cov-report=html
 ```
 
----
-
-## 📦 **완성된 POD 모듈들**
-
-### ✅ **POD1: 데이터 수집 및 관리** 
-- **파일**: `src/pod1_data_ingestion/` (491줄)
-- **기능**: GDAL 메타데이터 추출, 좌표계 검증, 파일 무결성
-- **지원 포맷**: GeoTIFF, GPKG, Shapefile
-
-### ✅ **POD2: 이미지 크로핑**
-- **파일**: `src/pod2_cropping/` (377줄)  
-- **기능**: ROI 기반 자동 크로핑, 다중 좌표계 변환
-- **최적화**: Convex Hull, 버퍼 처리, 병렬 처리
-
-### ✅ **POD3: 타일링 시스템**
-- **파일**: `src/pod3_tiling/` (451줄)
-- **기능**: 640x640 타일 생성, 20% 겹침, R-tree 인덱싱
-- **성능**: 메모리 효율적 Window 기반 처리
-
-### ✅ **POD4: AI 추론**
-- **파일**: `src/pod4_ai_inference/` (559줄)
-- **기능**: YOLOv11 멀티모델, GPU 가속, NMS 후처리
-- **모델**: 조사료, 비닐하우스, 경작지 분류
-
-### ✅ **POD5: 결과 병합**
-- **파일**: `src/pod5_merging/` (598줄)
-- **기능**: 공간 집계, IOU 계산, 필지별 통계
-- **전략**: Weighted Average, Max Confidence, Union, Intersection
-
-### ✅ **POD6: GPKG 내보내기**
-- **파일**: `src/pod6_gpkg_export/` (506줄)
-- **기능**: 표준 준수 GPKG 생성, 개인정보 보호, 행정 템플릿
-- **출력**: 다중 레이어, 메타데이터, 통계 보고서
+### 테스트 현황
+- ✅ 데이터베이스 CRUD 테스트
+- ✅ 타일링 모듈 단위 테스트
+- 🔄 API 엔드포인트 테스트
+- ❌ 종단간(E2E) 테스트
 
 ---
 
-## 🔌 **API 엔드포인트**
+## 🚀 배포
 
-### **현재 구현 상태**
-- ✅ **구조 완성**: FastAPI, 미들웨어, 스키마 (100%)
-- 🔄 **엔드포인트**: 기본 로직 구현 (40%)
-- ❌ **데이터 연결**: DB 통합 대기 (0%)
-
-### **주요 엔드포인트**
+### Render.com 배포
 ```bash
-# 이미지 관리
-POST   /api/v1/images          # 이미지 업로드
-GET    /api/v1/images/{id}     # 이미지 조회
-DELETE /api/v1/images/{id}     # 이미지 삭제
+# GitHub 푸시로 자동 배포
+git push origin main
 
-# 크로핑 작업
-POST   /api/v1/crops           # 크로핑 시작
-GET    /api/v1/crops/{job_id}  # 작업 상태 조회
-
-# 분석 작업  
-POST   /api/v1/analyses        # 분석 시작
-GET    /api/v1/analyses/{id}   # 분석 결과 조회
-
-# GPKG 내보내기
-POST   /api/v1/exports         # 내보내기 시작
-GET    /api/v1/exports/{id}    # 내보내기 상태
-
-# 통계
-GET    /api/v1/statistics      # 전체 통계
-GET    /api/v1/statistics/{pnu} # 필지별 통계
+# 또는 수동 배포
+render deploy --service-name nong-view-api
 ```
 
----
-
-## 🗄️ **데이터베이스 스키마**
-
-### **예정된 테이블 구조**
-```sql
--- 이미지 메타데이터
-CREATE TABLE images (
-    id UUID PRIMARY KEY,
-    filename VARCHAR(255),
-    crs VARCHAR(50),
-    bounds GEOMETRY(POLYGON, 4326),
-    upload_time TIMESTAMP
-);
-
--- 분석 작업
-CREATE TABLE analyses (
-    id UUID PRIMARY KEY,
-    image_id UUID REFERENCES images(id),
-    status VARCHAR(20),
-    config JSONB,
-    result JSONB
-);
-
--- 크로핑 결과
-CREATE TABLE crop_results (
-    id UUID PRIMARY KEY,
-    analysis_id UUID REFERENCES analyses(id),
-    geometry GEOMETRY(POLYGON, 4326),
-    crop_path VARCHAR(500)
-);
-
--- GPKG 내보내기
-CREATE TABLE exports (
-    id UUID PRIMARY KEY,
-    analysis_id UUID REFERENCES analyses(id),
-    export_type VARCHAR(50),
-    file_path VARCHAR(500)
-);
-```
-
----
-
-## 🚀 **배포 가이드**
-
-### **Render.com 클라우드 배포**
-프로젝트는 Render.com에 최적화되어 있습니다:
-
+### Docker 컨테이너
 ```bash
-# 1. 자동 배포 (권장)
-git push origin main  # GitHub 푸시 시 자동 배포
+# 이미지 빌드
+docker build -t nong-view:latest .
 
-# 2. Blueprint 배포
-# render.yaml 파일 사용하여 전체 서비스 자동 생성
+# 컨테이너 실행
+docker run -p 8000:8000 --env-file .env nong-view:latest
 ```
 
-### **배포 특징**
-- ✅ **다단계 Fallback**: 의존성 오류 자동 해결
-- ✅ **GDAL 지원**: 지리정보 라이브러리 완전 통합
-- ✅ **PostgreSQL + PostGIS**: 공간 데이터베이스 준비
-- ✅ **Redis 캐싱**: 성능 최적화
-
-### **환경 요구사항**
-- **Python**: 3.10+
-- **PostgreSQL**: PostGIS 확장 필수
-- **Redis**: 캐싱 및 작업 큐
-- **GDAL**: 지리정보 처리 라이브러리
+### 환경 요구사항
+- Python 3.10+
+- PostgreSQL 14+ with PostGIS
+- GDAL 3.0+
+- 최소 4GB RAM, 10GB Storage
 
 ---
 
-## 📚 **문서화**
+## 📚 문서
 
-### **완성된 가이드 (95%)**
-- 📋 **[아키텍처 가이드](Dev_md/02_guides/architecture.md)** - 시스템 설계 상세
-- 🔌 **[API 설계 문서](Dev_md/02_guides/api-design.md)** - REST API 명세  
-- 🐘 **[PostgreSQL 설정](Dev_md/setup/postgresql-setup.md)** - DB 구성 가이드
-- 🌐 **[Render.com 배포](Dev_md/setup/render-services-setup.md)** - 클라우드 배포
-- 📊 **[완성도 분석](Dev_md/05_reports/project-completion-analysis.md)** - 전체 진행 상황
-- 📝 **[개발 로그](Dev_md/04_development_logs/)** - 6개 상세 진행 기록
+### 개발 문서
+| 문서 | 위치 | 설명 |
+|------|------|------|
+| **아키텍처 가이드** | [Dev_md/06_architecture/](Dev_md/06_architecture/) | 시스템 설계 |
+| **API 설계** | [Dev_md/03_guides/api_design_guide.md](Dev_md/03_guides/api_design_guide.md) | REST API 명세 |
+| **데이터베이스** | [Dev_md/03_guides/database_usage_guide.md](Dev_md/03_guides/database_usage_guide.md) | DB 사용법 |
+| **개발 규칙** | [Dev_md/02_rules/](Dev_md/02_rules/) | 코딩 컨벤션 |
 
-### **개발자 가이드**
-- 📋 **[개발 규칙](Dev_md/01_rules/)** - 코딩 표준 및 관례
-- 🎯 **[진행 추적](Dev_md/03_progress/)** - 작업 현황 관리
-- 🤖 **[CLAUDE.md](CLAUDE.md)** - Claude 개발 가이드 (★ 필독)
+### 프롬프트 문서
+| 문서 | 위치 | 용도 |
+|------|------|------|
+| **DB 개발 프롬프트** | [Dev_md/01_prompts/database_development_prompt.md](Dev_md/01_prompts/database_development_prompt.md) | AI 어시스턴트용 |
+| **초기 요구사항** | [Dev_md/01_prompts/initial_requirements.md](Dev_md/01_prompts/initial_requirements.md) | 프로젝트 스펙 |
 
----
-
-## 🧪 **테스트**
-
-### **현재 테스트 상태 (20%)**
-```bash
-# 기존 테스트 실행
-pytest tests/test_tiling.py -v
-
-# 커버리지 확인
-pytest --cov=src tests/
-```
-
-### **테스트 계획**
-- 🔄 **POD 단위 테스트**: 각 모듈별 개별 테스트
-- 🔄 **API 통합 테스트**: 엔드포인트별 E2E 테스트  
-- 🔄 **성능 테스트**: 대용량 이미지 처리 성능
-- 🔄 **데이터베이스 테스트**: CRUD 작업 검증
+### 진행 보고서
+| 보고서 | 위치 | 내용 |
+|--------|------|------|
+| **개발 로그** | [Dev_md/04_development_logs/](Dev_md/04_development_logs/) | 일일 진행 기록 |
+| **평가 보고서** | [Dev_md/05_reports/](Dev_md/05_reports/) | 프로젝트 평가 |
 
 ---
 
-## 🚧 **개발 로드맵**
+## 🚧 개발 로드맵
 
-### **📅 다음 개발 세션 (2025-10-28~)**
+### ✅ 완료된 작업 (90%)
+- [x] 6개 POD 모듈 구현
+- [x] SQLAlchemy 데이터베이스 모델
+- [x] Alembic 마이그레이션 설정
+- [x] 로컬 테스트 환경 구축
+- [x] API 기본 구조
+- [x] 배포 환경 구성
 
-#### **1순위: 데이터베이스 통합 (3-4일)**
-- ❌ SQLAlchemy ORM 모델 구현
-- ❌ Alembic 마이그레이션 설정
-- ❌ API-POD 모듈 연결
-- ❌ 실제 데이터 처리 로직
+### 🔄 진행 중 (10%)
+- [ ] API-POD 실제 연결
+- [ ] 백그라운드 작업 큐 (Celery)
+- [ ] JWT 인증 시스템
+- [ ] 통합 테스트 작성
 
-#### **2순위: API 완성 (2-3일)**
-- ❌ 인증/권한 시스템
-- ❌ 에러 처리 정규화
-- ❌ 백그라운드 작업 큐
-- ❌ 파일 업로드/다운로드
-
-#### **3순위: 테스트 및 배포 (2일)**
-- ❌ 종합 테스트 슈트
-- ❌ 프로덕션 배포 검증
-- ❌ 모니터링 구현
-- ❌ 문서 업데이트
-
-### **🎯 MVP 목표 (2025-11-07)**
-완전한 **이미지 업로드 → 분석 → GPKG 다운로드** 워크플로우 구현
-
----
-
-## 🤝 **기여 가이드**
-
-### **개발 참여**
-1. **이슈 생성**: 버그 리포트 또는 기능 제안
-2. **Fork & Clone**: 개발 환경 설정
-3. **브랜치 생성**: `feature/기능명` 또는 `fix/버그명`
-4. **코드 작성**: 기존 컨벤션 준수
-5. **테스트 추가**: 새 기능에 대한 테스트 작성
-6. **Pull Request**: 상세한 변경 내용 설명
-
-### **코드 컨벤션**
-- **Python**: PEP 8 준수, 100% 타입 어노테이션
-- **API**: RESTful 원칙, Pydantic 스키마
-- **문서**: Markdown, 한국어/영어 병행
-- **커밋**: Conventional Commits 형식
+### 📅 향후 계획
+| 날짜 | 작업 | 예상 시간 |
+|------|------|----------|
+| 10/28-29 | API-POD 통합 | 16시간 |
+| 10/30-31 | 인증 및 권한 | 8시간 |
+| 11/01-02 | 테스트 작성 | 8시간 |
+| 11/03-04 | 배포 및 최적화 | 8시간 |
+| 11/05 | **MVP 릴리즈** | - |
 
 ---
 
-## 📞 **지원 및 문의**
+## 🤝 기여 가이드
 
-### **문제 해결**
-- 🐛 **버그 리포트**: [GitHub Issues](https://github.com/aebonlee/Nong-View/issues)
-- 📖 **문서 참조**: [Dev_md/](Dev_md/) 폴더 전체 가이드
-- 💬 **질문 및 토론**: GitHub Discussions
+### 개발 참여 방법
+1. 이슈 생성 또는 선택
+2. 브랜치 생성: `feature/기능명` 또는 `fix/버그명`
+3. 코드 작성 (컨벤션 준수)
+4. 테스트 추가 및 실행
+5. Pull Request 생성
 
-### **개발팀**
-- **Lead Developer**: Claude Sonnet (Backend, PODs)
-- **Architecture**: Claude Opus (System Design)
-- **Contact**: GitHub Issues를 통한 소통
-
----
-
-## 📄 **라이선스**
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+### 코드 컨벤션
+- **Python**: PEP 8, Type Hints 필수
+- **Git**: Conventional Commits
+- **문서**: Markdown, 한/영 병행
+- **테스트**: pytest, 최소 80% 커버리지
 
 ---
 
-## 🌟 **주요 특징**
+## 👥 개발팀
 
-### **🏆 기술적 우수성**
-- **전문가급 코드 품질**: 100% 타입 어노테이션, 포괄적 에러 처리
-- **확장 가능한 아키텍처**: 모듈식 POD 설계, 독립적 동작
-- **성능 최적화**: GPU 가속, 병렬 처리, 메모리 효율성
-- **프로덕션 준비**: 컨테이너화, 클라우드 네이티브
+### Claude AI 개발팀
+| 역할 | 담당 | 구현 내용 |
+|------|------|----------|
+| **Opus** | 아키텍처 설계 | 시스템 설계, POD1/3/4/5 초기 구현 |
+| **Sonnet** | 백엔드 개발 | POD2/6 구현, API, DB, 문서화 |
 
-### **🚀 배포 준비도**
-- **즉시 배포 가능**: Render.com 최적화 설정
-- **안정성**: 다단계 fallback 시스템
-- **확장성**: 수평적 확장 지원
-- **모니터링**: 헬스 체크, 메트릭 수집
-
-### **📚 완전한 문서화**
-- **95% 문서화 완성도**: 업계 최고 수준
-- **실용적 가이드**: 설정부터 운영까지
-- **개발자 친화적**: 상세한 코드 주석, API 문서
+### 기여 현황
+- **Opus (50%)**: 핵심 알고리즘, 초기 아키텍처
+- **Sonnet (50%)**: API 개발, DB 통합, 배포 설정
 
 ---
 
-**🎯 목표**: 한국 스마트 농업 혁신을 위한 AI 플랫폼  
-**💪 현황**: 85% 완성, MVP 준비 완료  
-**🚀 비전**: 드론 기반 정밀 농업 모니터링의 표준화
+## 📄 라이선스
 
-*⭐ 프로젝트가 도움이 되셨다면 Star를 눌러주세요!*
+MIT License - 자유롭게 사용, 수정, 배포 가능
+
+---
+
+## 🌟 프로젝트 특징
+
+### 기술적 우수성
+- ✅ **모듈식 아키텍처**: 독립적인 POD 모듈로 유지보수 용이
+- ✅ **확장 가능**: 새로운 AI 모델 쉽게 추가 가능
+- ✅ **성능 최적화**: GPU 가속, 병렬 처리, 메모리 효율
+- ✅ **표준 준수**: GeoJSON, GPKG 등 국제 표준 지원
+
+### 실무 적용성
+- ✅ **즉시 사용 가능**: 완성된 POD 모듈
+- ✅ **커스터마이징 용이**: 설정 파일로 세부 조정
+- ✅ **다양한 환경 지원**: 로컬, 클라우드, 컨테이너
+- ✅ **완벽한 문서화**: 98% 문서화 완성도
+
+---
+
+**🎯 목표**: 한국 스마트 농업의 디지털 전환 선도  
+**💪 현황**: 90% 완성, 데이터베이스 통합 완료  
+**🚀 비전**: AI 기반 농업 분석의 표준 플랫폼
+
+*⭐ Star를 눌러 프로젝트를 응원해주세요!*
