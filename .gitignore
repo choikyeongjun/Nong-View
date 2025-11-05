@@ -150,6 +150,17 @@ models/*.pt
 models/*.pth
 models/*.onnx
 
+# YOLO model files (root level)
+*.pt
+*.pth
+*.onnx
+
+# Training results and processed datasets
+results/
+model3_greenhouse/
+model3_greenhouse_seg_processed/
+best/02_training/results/
+
 # Temporary files
 *.tmp
 *.bak

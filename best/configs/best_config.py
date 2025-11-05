@@ -18,17 +18,27 @@ from enum import Enum
 
 class ModelType(Enum):
     """지원하는 모델 타입"""
+    # Detection 모델
     YOLO11N = "yolo11n"
     YOLO11S = "yolo11s"
     YOLO11M = "yolo11m"
     YOLO11L = "yolo11l"
     YOLO11X = "yolo11x"
+    # Segmentation 모델
+    YOLO11N_SEG = "yolo11n-seg"
+    YOLO11S_SEG = "yolo11s-seg"
+    YOLO11M_SEG = "yolo11m-seg"
+    YOLO11L_SEG = "yolo11l-seg"
+    YOLO11X_SEG = "yolo11x-seg"
 
 class DatasetType(Enum):
     """지원하는 데이터셋 타입"""
+    # Detection 데이터셋
     GREENHOUSE_MULTI = "greenhouse_multi"
     GREENHOUSE_SINGLE = "greenhouse_single"
     GROWTH_TIF = "growth_tif"
+    # Segmentation 데이터셋
+    MODEL3_GREENHOUSE_SEG = "model3_greenhouse_seg"
 
 @dataclass
 class HardwareConfig:
@@ -95,6 +105,31 @@ class DataConfig:
                 "Greenhouse_single": 3.0,   # 2% → 3.0 (강한 업 가중치)  
                 "Greenhouse_multi": 5.0     # 1% → 5.0 (최강 업 가중치)
             }
+        },
+        DatasetType.MODEL3_GREENHOUSE_SEG: {
+            "path": "model3_greenhouse_seg_processed",
+            "classes": ["Greenhouse_single", "Greenhouse_multi"],
+            "total_images": 3855,  # 원본 1483 + 증강 2372
+            "original_images": 1483,
+            "augmented_images": 2372,
+            "total_objects": 3855,
+            "task": "segment",
+            "original_image_size": 1024,  # 원본 이미지 크기
+            "recommended_train_size": 1024,  # 학습 권장 크기 (원본 크기 유지)
+            "split_info": {
+                "train": 3558,  # 원본 1186 + 증강 2372
+                "val": 147,
+                "test": 150
+            },
+            "augmentation_info": {
+                "enabled": True,
+                "factor": 3,
+                "method": "stratified_split_segmentation"
+            },
+            "class_balance": {
+                "Greenhouse_single": 1.0,
+                "Greenhouse_multi": 1.0
+            }
         }
     })
     
@@ -129,6 +164,8 @@ class TrainingConfig:
     box_loss_gain: float = 7.5
     cls_loss_gain: float = 0.5
     dfl_loss_gain: float = 1.5
+    # Segmentation 전용
+    mask_loss_gain: float = 2.5  # Mask loss weight for segmentation
     
     # 정규화 설정
     dropout: float = 0.0
@@ -164,6 +201,7 @@ class TrainingConfig:
     
     # 모델별 최적 설정
     model_specific: Dict[ModelType, Dict[str, Any]] = field(default_factory=lambda: {
+        # Detection 모델
         ModelType.YOLO11N: {
             "batch_size": 32,
             "lr0": 0.01,
@@ -188,6 +226,47 @@ class TrainingConfig:
             "batch_size": 8,
             "lr0": 0.003,
             "warmup_epochs": 5
+        },
+        # Segmentation 모델 (1024px 원본 데이터 최적화)
+        ModelType.YOLO11N_SEG: {
+            "batch_size": 8,   # 1024px 기준 (640px일 때 16)
+            "imgsz": 1024,     # 원본 크기 유지
+            "lr0": 0.001,
+            "warmup_epochs": 3,
+            "overlap_mask": True,
+            "mask_ratio": 4
+        },
+        ModelType.YOLO11S_SEG: {
+            "batch_size": 6,   # 1024px 기준 (640px일 때 12)
+            "imgsz": 1024,
+            "lr0": 0.001,
+            "warmup_epochs": 3,
+            "overlap_mask": True,
+            "mask_ratio": 4
+        },
+        ModelType.YOLO11M_SEG: {
+            "batch_size": 16,  # 1024px 기준, RTX A6000 최적화
+            "imgsz": 1024,
+            "lr0": 0.0008,
+            "warmup_epochs": 5,
+            "overlap_mask": True,
+            "mask_ratio": 4
+        },
+        ModelType.YOLO11L_SEG: {
+            "batch_size": 12,  # 1024px 기준, RTX A6000 최적화
+            "imgsz": 1024,
+            "lr0": 0.0005,
+            "warmup_epochs": 5,
+            "overlap_mask": True,
+            "mask_ratio": 4
+        },
+        ModelType.YOLO11X_SEG: {
+            "batch_size": 8,   # 1024px 기준, RTX A6000 최적화
+            "imgsz": 1024,
+            "lr0": 0.0003,
+            "warmup_epochs": 5,
+            "overlap_mask": True,
+            "mask_ratio": 4
         }
     })
 

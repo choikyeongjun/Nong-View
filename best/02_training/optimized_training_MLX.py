@@ -14,6 +14,10 @@ Advanced training optimization system implementing:
 
 import os
 import sys
+
+# Fix OpenMP duplicate library warning
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import torch
 import torch.nn as nn
 from torch.cuda.amp import GradScaler, autocast
@@ -32,7 +36,10 @@ import warnings
 from ultralytics import YOLO
 from collections import defaultdict
 import psutil
-import GPUtil
+try:
+    import GPUtil
+except ImportError:
+    GPUtil = None  # Optional dependency
 from tqdm import tqdm
 import gc
 import time
@@ -52,8 +59,6 @@ logger = logging.getLogger(__name__)
 class TrainingStrategy(Enum):
     """Training strategy types"""
     STANDARD = "standard"
-    PROGRESSIVE = "progressive"  # Progressive resizing
-    CURRICULUM = "curriculum"    # Easy to hard samples
     ENSEMBLE = "ensemble"        # Multiple model training
     DISTILLATION = "distillation"  # Knowledge distillation
 
@@ -67,6 +72,7 @@ class TrainingConfig:
     epochs: int
     batch_size: int
     imgsz: int
+    task: str = "segment"  # detect or segment
     
     # Optimization settings  
     optimizer: str = "AdamW"
@@ -77,7 +83,7 @@ class TrainingConfig:
     momentum: float = 0.937
     
     # Advanced settings
-    strategy: TrainingStrategy = TrainingStrategy.PROGRESSIVE
+    strategy: TrainingStrategy = TrainingStrategy.STANDARD
     use_amp: bool = True
     gradient_clip_val: float = 10.0
     ema_decay: float = 0.9999
@@ -95,13 +101,14 @@ class TrainingConfig:
     
     # Hardware settings
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    workers: int = 8
+    workers: int = 0  # Windows에서 안정성을 위해 0으로 설정 (멀티프로세싱 비활성화)
     pin_memory: bool = True
     
     # Loss weights (for multi-task learning)
     box_loss_weight: float = 7.5
     cls_loss_weight: float = 0.5
     dfl_loss_weight: float = 1.5
+    mask_loss_weight: float = 2.5  # For segmentation only
     
     # Early stopping
     patience: int = 30
@@ -110,6 +117,10 @@ class TrainingConfig:
     # Checkpointing
     save_period: int = 5
     keep_checkpoints: int = 3
+    
+    # Segmentation-specific settings
+    overlap_mask: bool = True  # For segmentation
+    mask_ratio: int = 4  # Mask downsampling ratio for segmentation
 
 
 class AdvancedLearningRateScheduler:
@@ -121,23 +132,21 @@ class AdvancedLearningRateScheduler:
         self.current_epoch = 0
         self.current_lr = config.base_lr
         
-        # Initialize scheduler based on strategy
-        if config.strategy == TrainingStrategy.PROGRESSIVE:
-            self.scheduler = CosineAnnealingWarmRestarts(
-                optimizer, 
-                T_0=config.epochs // 4,
-                T_mult=2,
-                eta_min=config.final_lr
-            )
-        else:
-            self.scheduler = OneCycleLR(
-                optimizer,
-                max_lr=config.base_lr,
-                epochs=config.epochs,
-                steps_per_epoch=1,
-                pct_start=config.warmup_epochs / config.epochs,
-                final_div_factor=config.base_lr / config.final_lr
-            )
+        # Initialize scheduler
+        # pct_start는 0.0 < x < 1.0 범위여야 함
+        # warmup_epochs가 total epochs보다 클 수 없음
+        safe_warmup = min(config.warmup_epochs, config.epochs - 1)
+        pct_start = safe_warmup / max(config.epochs, 1)
+        pct_start = min(0.3, max(0.01, pct_start))  # 0.01 ~ 0.3 범위로 제한
+        
+        self.scheduler = OneCycleLR(
+            optimizer,
+            max_lr=config.base_lr,
+            epochs=config.epochs,
+            steps_per_epoch=1,
+            pct_start=pct_start,
+            final_div_factor=max(10, config.base_lr / config.final_lr)
+        )
     
     def step(self, metrics: Optional[Dict] = None):
         """Update learning rate based on metrics"""
@@ -195,6 +204,10 @@ class LossFunctionOptimizer:
             'dfl': self.config.dfl_loss_weight
         }
         
+        # Add mask loss weight for segmentation
+        if self.config.task == 'segment':
+            weights['mask'] = self.config.mask_loss_weight
+        
         # Adjust weights based on dataset type
         if self.config.dataset_type == DatasetType.GROWTH_TIF:
             # Growth TIF has severe class imbalance
@@ -202,6 +215,10 @@ class LossFunctionOptimizer:
         elif self.config.dataset_type == DatasetType.GREENHOUSE_MULTI:
             # Multiple greenhouses need better localization
             weights['box'] *= 1.2
+        elif self.config.dataset_type == DatasetType.MODEL3_GREENHOUSE_SEG:
+            # Segmentation task - precise boundary detection is important
+            if 'mask' in weights:
+                weights['mask'] *= 1.2
         
         return weights
     
@@ -240,7 +257,14 @@ class OptimizedModelTrainer:
         self.scaler = GradScaler() if config.use_amp else None
         
         # Performance tracking
-        self.best_metrics = {'mAP50': 0, 'mAP50-95': 0, 'loss': float('inf')}
+        if config.task == 'segment':
+            self.best_metrics = {
+                'mAP50': 0, 'mAP50-95': 0, 
+                'mask_mAP50': 0, 'mask_mAP50-95': 0,
+                'loss': float('inf')
+            }
+        else:
+            self.best_metrics = {'mAP50': 0, 'mAP50-95': 0, 'loss': float('inf')}
         self.training_history = defaultdict(list)
         
         # Hardware optimization
@@ -270,7 +294,14 @@ class OptimizedModelTrainer:
     
     def _initialize_model(self) -> YOLO:
         """Initialize YOLO model with optimizations"""
-        model_name = f"yolo11{self.config.model_type.value}.pt"
+        # Get model filename from model type
+        model_value = self.config.model_type.value
+        
+        # For segmentation models, ensure .pt extension
+        if model_value.endswith('-seg'):
+            model_name = f"{model_value}.pt"
+        else:
+            model_name = f"yolo11{model_value}.pt"
         
         # Load pretrained model
         model = YOLO(model_name)
@@ -278,6 +309,8 @@ class OptimizedModelTrainer:
         # Apply model-specific optimizations
         if hasattr(model.model, 'half') and self.config.use_amp:
             model.model = model.model.half()
+        
+        logger.info(f"Model initialized: {model_name} (task: {self.config.task})")
         
         return model
     
@@ -301,46 +334,6 @@ class OptimizedModelTrainer:
         
         return optimizer
     
-    def _apply_progressive_resizing(self, epoch: int) -> int:
-        """Apply progressive resizing strategy"""
-        if self.config.strategy != TrainingStrategy.PROGRESSIVE:
-            return self.config.imgsz
-        
-        # Start with smaller images and gradually increase
-        min_size = 320
-        max_size = self.config.imgsz
-        
-        progress = epoch / self.config.epochs
-        
-        if progress < 0.25:
-            return min_size
-        elif progress < 0.5:
-            return 416
-        elif progress < 0.75:
-            return 512
-        else:
-            return max_size
-    
-    def _apply_curriculum_learning(self, epoch: int) -> Dict[str, Any]:
-        """Apply curriculum learning - easy to hard samples"""
-        if self.config.strategy != TrainingStrategy.CURRICULUM:
-            return {}
-        
-        progress = epoch / self.config.epochs
-        
-        # Start with easy samples (high confidence) and gradually include harder ones
-        confidence_threshold = max(0.3, 0.7 * (1 - progress))
-        
-        # Adjust augmentation intensity
-        augmentation_intensity = min(1.0, progress * 1.5)
-        
-        return {
-            'confidence_threshold': confidence_threshold,
-            'mosaic': self.config.mosaic * augmentation_intensity,
-            'mixup': self.config.mixup * augmentation_intensity,
-            'copy_paste': self.config.copy_paste * augmentation_intensity
-        }
-    
     def train(self, data_yaml: str) -> Dict[str, Any]:
         """Main training loop with advanced optimization"""
         logger.info(f"Starting training with data: {data_yaml}")
@@ -355,12 +348,13 @@ class OptimizedModelTrainer:
         # Training configuration
         train_args = {
             'data': data_yaml,
+            'task': self.config.task,
             'epochs': self.config.epochs,
             'batch': self.config.batch_size,
             'imgsz': self.config.imgsz,
             'optimizer': self.config.optimizer,
             'lr0': self.config.base_lr,
-            'lrf': self.config.final_lr,
+            'lrf': self.config.final_lr / self.config.base_lr,
             'momentum': self.config.momentum,
             'weight_decay': self.config.weight_decay,
             'warmup_epochs': self.config.warmup_epochs,
@@ -390,23 +384,23 @@ class OptimizedModelTrainer:
             'seed': 42,
             'deterministic': False,
             'single_cls': False,
-            'rect': False,
+            'rect': True,  # Rectangular training for stability
             'cos_lr': True,
             'close_mosaic': 10,
             'resume': False,
-            'overlap_mask': True,
-            'mask_ratio': 4,
             'val': True,
-            'plots': True
+            'plots': True,
+            'cache': False,  # Disable cache to avoid empty tensor issues
+            'fraction': 1.0  # Use full dataset
         }
         
-        # Apply strategy-specific modifications
-        if self.config.strategy == TrainingStrategy.PROGRESSIVE:
-            logger.info("Using progressive resizing strategy")
-            # Will be handled epoch by epoch
-        elif self.config.strategy == TrainingStrategy.CURRICULUM:
-            logger.info("Using curriculum learning strategy")
-            # Will be handled epoch by epoch
+        # Add segmentation-specific parameters
+        if self.config.task == 'segment':
+            train_args.update({
+                'overlap_mask': self.config.overlap_mask,
+                'mask_ratio': self.config.mask_ratio
+            })
+            logger.info(f"Segmentation mode enabled: overlap_mask={self.config.overlap_mask}, mask_ratio={self.config.mask_ratio}")
         
         # Start training with monitoring
         try:
@@ -473,16 +467,41 @@ class OptimizedModelTrainer:
     
     def _generate_training_report(self, results: Any) -> Dict[str, Any]:
         """Generate comprehensive training report"""
+        # Extract metrics based on task
+        final_metrics = {
+            'mAP50': results.results_dict.get('metrics/mAP50(B)', 0),
+            'mAP50-95': results.results_dict.get('metrics/mAP50-95(B)', 0),
+            'precision': results.results_dict.get('metrics/precision(B)', 0),
+            'recall': results.results_dict.get('metrics/recall(B)', 0),
+        }
+        
+        # Add segmentation metrics if available
+        if self.config.task == 'segment':
+            final_metrics.update({
+                'mask_mAP50': results.results_dict.get('metrics/mAP50(M)', 0),
+                'mask_mAP50-95': results.results_dict.get('metrics/mAP50-95(M)', 0),
+                'mask_precision': results.results_dict.get('metrics/precision(M)', 0),
+                'mask_recall': results.results_dict.get('metrics/recall(M)', 0),
+            })
+            
+            # Update best mask metrics
+            if final_metrics['mask_mAP50'] > self.best_metrics.get('mask_mAP50', 0):
+                self.best_metrics['mask_mAP50'] = final_metrics['mask_mAP50']
+                self.best_metrics['mask_mAP50-95'] = final_metrics['mask_mAP50-95']
+        
+        # Convert config to dict with Enum serialization
+        config_dict = asdict(self.config)
+        # Convert Enum types to strings for JSON serialization
+        config_dict['model_type'] = self.config.model_type.name
+        config_dict['dataset_type'] = self.config.dataset_type.name
+        config_dict['strategy'] = self.config.strategy.value
+        
         report = {
             'timestamp': datetime.now().isoformat(),
-            'config': asdict(self.config),
+            'task': self.config.task,
+            'config': config_dict,
             'best_metrics': self.best_metrics,
-            'final_metrics': {
-                'mAP50': results.results_dict.get('metrics/mAP50(B)', 0),
-                'mAP50-95': results.results_dict.get('metrics/mAP50-95(B)', 0),
-                'precision': results.results_dict.get('metrics/precision(B)', 0),
-                'recall': results.results_dict.get('metrics/recall(B)', 0),
-            },
+            'final_metrics': final_metrics,
             'training_time': results.results_dict.get('train_time', 0),
             'hardware_info': {
                 'gpu': torch.cuda.get_device_name() if self.device.type == 'cuda' else 'CPU',
@@ -494,8 +513,8 @@ class OptimizedModelTrainer:
         
         # Save report
         report_file = self.output_dir / 'training_report.json'
-        with open(report_file, 'w') as f:
-            json.dump(report, f, indent=4)
+        with open(report_file, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=4, ensure_ascii=False)
         
         logger.info(f"Training report saved to {report_file}")
         
@@ -539,6 +558,7 @@ class EnsembleTrainer:
     
     def _generate_ensemble_report(self) -> Dict[str, Any]:
         """Generate ensemble training report"""
+        # Basic metrics
         avg_metrics = {
             'mAP50': np.mean([r['final_metrics']['mAP50'] for r in self.results]),
             'mAP50-95': np.mean([r['final_metrics']['mAP50-95'] for r in self.results]),
@@ -546,35 +566,75 @@ class EnsembleTrainer:
             'recall': np.mean([r['final_metrics']['recall'] for r in self.results])
         }
         
-        return {
+        # Segmentation metrics (if available)
+        if 'mask_mAP50' in self.results[0]['final_metrics']:
+            avg_metrics.update({
+                'mask_mAP50': np.mean([r['final_metrics'].get('mask_mAP50', 0) for r in self.results]),
+                'mask_mAP50-95': np.mean([r['final_metrics'].get('mask_mAP50-95', 0) for r in self.results]),
+                'mask_precision': np.mean([r['final_metrics'].get('mask_precision', 0) for r in self.results]),
+                'mask_recall': np.mean([r['final_metrics'].get('mask_recall', 0) for r in self.results])
+            })
+        
+        # Find best model
+        best_model = max(self.results, key=lambda x: x['final_metrics']['mAP50'])
+        
+        ensemble_report = {
             'ensemble_size': len(self.results),
             'average_metrics': avg_metrics,
             'individual_results': self.results,
-            'best_model': max(self.results, key=lambda x: x['final_metrics']['mAP50'])
+            'best_model': best_model
         }
+        
+        # Save ensemble report to file
+        output_dir = Path("results") / f"ensemble_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        report_file = output_dir / 'ensemble_report.json'
+        with open(report_file, 'w', encoding='utf-8') as f:
+            json.dump(ensemble_report, f, indent=4, ensure_ascii=False)
+        
+        logger.info(f"Ensemble report saved to {report_file}")
+        
+        return ensemble_report
 
 
 def create_training_config(
     model_type: ModelType,
     dataset_type: DatasetType,
-    strategy: TrainingStrategy = TrainingStrategy.PROGRESSIVE
+    data_yaml: Optional[str] = None
 ) -> TrainingConfig:
     """Factory function to create optimized training configuration"""
     
-    # Get base config from global CONFIG
-    dataset_config = CONFIG.dataset_configs[dataset_type]
-    model_config = CONFIG.model_configs[model_type]
+    # Determine task type based on model
+    is_segmentation = '_SEG' in model_type.name
+    task = 'segment' if is_segmentation else 'detect'
     
-    # Create training config
+    # Get dataset config
+    dataset_info = CONFIG.data.dataset_info.get(dataset_type, {})
+    
+    # Get model-specific config
+    model_specific = CONFIG.training.model_specific.get(model_type, {})
+    
+    # Create training config with defaults
+    # 이미지 크기: 모델별 설정 우선, 없으면 데이터셋 권장 크기, 없으면 기본값
+    default_imgsz = dataset_info.get('recommended_train_size', CONFIG.training.image_size)
+    
     config = TrainingConfig(
         model_type=model_type,
         dataset_type=dataset_type,
-        epochs=model_config['epochs'],
-        batch_size=model_config['batch_size'],
-        imgsz=model_config['imgsz'],
-        base_lr=model_config['lr0'],
-        strategy=strategy
+        task=task,
+        epochs=CONFIG.training.epochs,
+        batch_size=model_specific.get('batch_size', CONFIG.training.batch_size),
+        imgsz=model_specific.get('imgsz', default_imgsz),  # 모델별 또는 데이터셋별 크기
+        base_lr=model_specific.get('lr0', CONFIG.training.lr0),
+        warmup_epochs=model_specific.get('warmup_epochs', 3)
     )
+    
+    # Apply segmentation-specific settings
+    if is_segmentation:
+        config.overlap_mask = model_specific.get('overlap_mask', True)
+        config.mask_ratio = model_specific.get('mask_ratio', 4)
+        config.mask_loss_weight = CONFIG.training.mask_loss_gain
     
     # Apply dataset-specific adjustments
     if dataset_type == DatasetType.GROWTH_TIF:
@@ -589,25 +649,138 @@ def create_training_config(
     elif dataset_type == DatasetType.GREENHOUSE_SINGLE:
         # Single objects - simpler task
         config.epochs = int(config.epochs * 0.8)
+    elif dataset_type == DatasetType.MODEL3_GREENHOUSE_SEG:
+        # Segmentation task - precise boundary detection
+        config.mask_loss_weight *= 1.2
+        config.copy_paste = 0.3
+        config.mosaic = 1.0
+    
+    logger.info(f"Created training config for {model_type.name} on {dataset_type.name} (task: {task})")
     
     return config
 
 
 if __name__ == "__main__":
-    # Example usage
-    logger.info("Optimized Training System - Claude Opus")
+    logger.info("=" * 80)
+    logger.info("🎯 MODEL3 GREENHOUSE SEGMENTATION - ENSEMBLE TRAINING")
+    logger.info("=" * 80)
+    logger.info("Models: YOLO11M-SEG + YOLO11L-SEG + YOLO11X-SEG")
+    logger.info("Task: Segmentation")
+    logger.info("Dataset: model3_greenhouse_seg_processed")
+    logger.info("Image Size: 1024px (Original)")
+    logger.info("Strategy: Standard (Fixed Size)")
+    logger.info("=" * 80)
     
-    # Create configuration
-    config = create_training_config(
-        model_type=ModelType.YOLO11N,
-        dataset_type=DatasetType.GROWTH_TIF,
-        strategy=TrainingStrategy.PROGRESSIVE
-    )
+    # Configuration
+    data_yaml = r"C:\Users\LX\Nong-View\model3_greenhouse_seg_processed\data.yaml"
+    epochs = 1  # 정식 학습 설정
     
-    # Initialize trainer
-    trainer = OptimizedModelTrainer(config)
+    # 큰 모델들로 앙상블: Medium + Large + XLarge
+    model_sizes = [
+        ModelType.YOLO11M_SEG,
+        ModelType.YOLO11L_SEG,
+        ModelType.YOLO11X_SEG
+    ]
     
-    # Start training (requires data.yaml file)
-    # results = trainer.train("path/to/data.yaml")
+    # Create configs for each model
+    configs = []
+    logger.info("\n📋 Creating configurations for ensemble models:")
+    logger.info("-" * 80)
     
-    logger.info("Training system initialized successfully")
+    for model_type in model_sizes:
+        config = create_training_config(
+            model_type=model_type,
+            dataset_type=DatasetType.MODEL3_GREENHOUSE_SEG
+        )
+        config.epochs = epochs
+        
+        # 이미지 크기는 모델별 설정(1024)에서 자동으로 가져옴
+        # config.imgsz는 이미 1024로 설정됨
+        
+        # Batch size 수동 최적화 (RTX A6000 48GB, 1024px 이미지)
+        # 목표: GPU 메모리 80-90% 사용 (38-43GB)
+        if model_type == ModelType.YOLO11M_SEG:
+            config.batch_size = 32  # 1024px 기준 최적값
+        elif model_type == ModelType.YOLO11L_SEG:
+            config.batch_size = 24  # 1024px 기준 최적값
+        elif model_type == ModelType.YOLO11X_SEG:
+            config.batch_size = 16   # 1024px 기준 최적값
+        
+        # 자동 조절 옵션 (필요시)
+        # config.batch_size = -1
+        
+        configs.append(config)
+        
+        logger.info(f"✓ {model_type.name}")
+        batch_display = "Auto (GPU optimized)" if config.batch_size == -1 else str(config.batch_size)
+        logger.info(f"  - Image Size: {config.imgsz}px")
+        logger.info(f"  - Batch Size: {batch_display}")
+        logger.info(f"  - Learning Rate: {config.base_lr}")
+        logger.info(f"  - Epochs: {config.epochs}")
+        logger.info(f"  - Overlap Mask: {config.overlap_mask}")
+        logger.info(f"  - Mask Ratio: {config.mask_ratio}")
+    
+    logger.info("-" * 80)
+    logger.info(f"Total: {len(configs)} models will be trained sequentially")
+    logger.info("=" * 80)
+    
+    # Confirm start
+    logger.info("\n⏰ Estimated total training time (1024px, RTX A6000):")
+    logger.info("   100 epochs 기준:")
+    logger.info("   - YOLO11M-SEG (1024px, batch 16): ~6 hours")
+    logger.info("   - YOLO11L-SEG (1024px, batch 12): ~10 hours")
+    logger.info("   - YOLO11X-SEG (1024px, batch 8):  ~15 hours")
+    logger.info("   Total: ~31 hours")
+    logger.info(f"\n   Current setting: {epochs} epochs → ~{epochs/100*31:.1f} hours")
+    logger.info("   Expected GPU memory: 38-45GB (80-95%)")
+    logger.info("\n💡 1024px 학습으로 최고 성능 달성!")
+    logger.info("🚀 Starting ensemble training in 3 seconds...")
+    
+    import time
+    time.sleep(3)
+    
+    # Create ensemble trainer
+    ensemble_trainer = EnsembleTrainer(configs)
+    
+    # Train ensemble
+    logger.info("\n" + "=" * 80)
+    logger.info("ENSEMBLE TRAINING STARTED")
+    logger.info("=" * 80)
+    
+    try:
+        results = ensemble_trainer.train_ensemble(data_yaml)
+        
+        # Display results
+        logger.info("\n" + "=" * 80)
+        logger.info("🎉 ENSEMBLE TRAINING COMPLETED!")
+        logger.info("=" * 80)
+        logger.info(f"\nEnsemble Size: {results['ensemble_size']} models")
+        
+        logger.info(f"\n📊 Average Metrics:")
+        logger.info("-" * 80)
+        for metric, value in results['average_metrics'].items():
+            logger.info(f"  {metric:20s}: {value:.4f}")
+        
+        # Best model info (model_type이 이미 문자열로 변환됨)
+        best_model_name = results['best_model']['config']['model_type']
+        logger.info(f"\n🏆 Best Model: {best_model_name}")
+        logger.info("-" * 80)
+        logger.info(f"  Box mAP50      : {results['best_model']['final_metrics']['mAP50']:.4f}")
+        logger.info(f"  Box mAP50-95   : {results['best_model']['final_metrics']['mAP50-95']:.4f}")
+        if 'mask_mAP50' in results['best_model']['final_metrics']:
+            logger.info(f"  Mask mAP50     : {results['best_model']['final_metrics']['mask_mAP50']:.4f}")
+            logger.info(f"  Mask mAP50-95  : {results['best_model']['final_metrics']['mask_mAP50-95']:.4f}")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✅ All models trained successfully!")
+        logger.info("=" * 80)
+        
+    except KeyboardInterrupt:
+        logger.warning("\n\n⚠️  Training interrupted by user")
+        logger.info("Partial results may have been saved")
+        
+    except Exception as e:
+        logger.error(f"\n\n❌ Training failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
